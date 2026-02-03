@@ -1,0 +1,22 @@
+{
+  "name": "linear-kanban-mcp",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "MCP server for Linear kanban board management",
+  "bin": {
+    "linear-kanban-mcp": "./src/mcp-server.ts"
+  },
+  "scripts": {
+    "dev": "bun run --watch src/server.ts",
+    "start": "bun run src/server.ts",
+    "mcp": "bun run src/mcp-server.ts",
+    "test:all": "bun test src/",
+  },
+  "dependencies": {
+    "@linear/sdk": "^30.0.0",
+    "@modelcontextprotocol/sdk": "^0.5.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

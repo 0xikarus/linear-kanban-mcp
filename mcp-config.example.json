@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "linear-kanban": {
+      "command": "bun",
+      "args": ["run", "/path/to/linear-kanban-server/src/mcp-server.ts"],
+      "env": {
+        "LINEAR_API_KEY": "lin_api_YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
