@@ -853,7 +853,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   success: true,
                   comment: {
                     id: comment?.id,
-                    body: comment?.body,
                   },
                 },
                 null,
@@ -941,9 +940,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   success: true,
                   projectUpdate: {
                     id: update?.id,
-                    body: update?.body,
-                    health: update?.health,
-                    createdAt: update?.createdAt,
                     url: update?.url,
                   },
                 },
@@ -1160,8 +1156,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   milestone: {
                     id: milestone?.id,
                     name: milestone?.name,
-                    description: milestone?.description,
-                    targetDate: milestone?.targetDate,
                   },
                 },
                 null,
