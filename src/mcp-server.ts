@@ -134,6 +134,10 @@ const TOOLS = [
           type: "string",
           description: "Optional user ID to assign the issue to",
         },
+        milestoneId: {
+          type: "string",
+          description: "Optional milestone ID to assign the issue to",
+        },
       },
       required: ["title", "teamId"],
     },
@@ -167,6 +171,10 @@ const TOOLS = [
         assigneeId: {
           type: "string",
           description: "User ID to assign the issue to",
+        },
+        milestoneId: {
+          type: "string",
+          description: "Milestone ID to assign the issue to (use null to remove)",
         },
       },
       required: ["issueId"],
@@ -302,6 +310,163 @@ const TOOLS = [
       required: ["projectId"],
     },
   },
+  {
+    name: "list_milestones",
+    description:
+      "List all milestones (project milestones) in the workspace, optionally filtered by project",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        projectId: {
+          type: "string",
+          description: "Optional project ID to filter milestones by",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of milestones to return (default: 50)",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_milestone",
+    description: "Get detailed information about a specific milestone by its ID",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        milestoneId: {
+          type: "string",
+          description: "The ID of the milestone to retrieve",
+        },
+      },
+      required: ["milestoneId"],
+    },
+  },
+  {
+    name: "create_milestone",
+    description: "Create a new milestone for a project",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        name: {
+          type: "string",
+          description: "The name of the milestone",
+        },
+        projectId: {
+          type: "string",
+          description: "The ID of the project this milestone belongs to",
+        },
+        description: {
+          type: "string",
+          description: "Optional description of the milestone",
+        },
+        targetDate: {
+          type: "string",
+          description: "Optional target date for the milestone (ISO 8601 format, e.g., '2024-12-31')",
+        },
+        sortOrder: {
+          type: "number",
+          description: "Optional sort order for the milestone",
+        },
+      },
+      required: ["name", "projectId"],
+    },
+  },
+  {
+    name: "update_milestone",
+    description: "Update an existing milestone's properties",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        milestoneId: {
+          type: "string",
+          description: "The ID of the milestone to update",
+        },
+        name: {
+          type: "string",
+          description: "New name for the milestone",
+        },
+        description: {
+          type: "string",
+          description: "New description for the milestone",
+        },
+        targetDate: {
+          type: "string",
+          description: "New target date for the milestone (ISO 8601 format)",
+        },
+        sortOrder: {
+          type: "number",
+          description: "New sort order for the milestone",
+        },
+      },
+      required: ["milestoneId"],
+    },
+  },
+  {
+    name: "delete_milestone",
+    description: "Delete a milestone",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        milestoneId: {
+          type: "string",
+          description: "The ID of the milestone to delete",
+        },
+      },
+      required: ["milestoneId"],
+    },
+  },
+  {
+    name: "delete_issue",
+    description: "Permanently delete an issue from Linear",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        issueId: {
+          type: "string",
+          description: "The ID of the issue to delete",
+        },
+      },
+      required: ["issueId"],
+    },
+  },
+  {
+    name: "assign_issue_to_milestone",
+    description: "Assign an issue to a milestone or remove it from its current milestone",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        issueId: {
+          type: "string",
+          description: "The ID of the issue to assign",
+        },
+        milestoneId: {
+          type: "string",
+          description: "The ID of the milestone to assign the issue to. Pass null or omit to remove from milestone.",
+        },
+      },
+      required: ["issueId"],
+    },
+  },
+  {
+    name: "list_milestone_issues",
+    description: "List all issues assigned to a specific milestone",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        milestoneId: {
+          type: "string",
+          description: "The ID of the milestone to list issues for",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of issues to return (default: 50)",
+        },
+      },
+      required: ["milestoneId"],
+    },
+  },
 ];
 
 // Handle list tools request
@@ -411,6 +576,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const assignee = await issue.assignee;
         const project = await issue.project;
         const team = await issue.team;
+        const milestone = await issue.projectMilestone;
         const comments = await issue.comments();
 
         const issueDetails = {
@@ -427,6 +593,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             : null,
           project: project ? { id: project.id, name: project.name } : null,
           team: team ? { id: team.id, name: team.name } : null,
+          milestone: milestone
+            ? { id: milestone.id, name: milestone.name }
+            : null,
           url: issue.url,
           createdAt: issue.createdAt,
           updatedAt: issue.updatedAt,
@@ -508,6 +677,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           stateId,
           priority,
           assigneeId,
+          milestoneId,
         } = args as {
           title: string;
           description?: string;
@@ -516,6 +686,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           stateId?: string;
           priority?: number;
           assigneeId?: string;
+          milestoneId?: string;
         };
 
         const issuePayload: any = { title, teamId };
@@ -524,6 +695,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (stateId) issuePayload.stateId = stateId;
         if (priority !== undefined) issuePayload.priority = priority;
         if (assigneeId) issuePayload.assigneeId = assigneeId;
+        if (milestoneId) issuePayload.projectMilestoneId = milestoneId;
 
         const result = await linear.createIssue(issuePayload);
         const issue = await result.issue;
@@ -551,7 +723,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "update_issue": {
-        const { issueId, title, description, stateId, priority, assigneeId } =
+        const { issueId, title, description, stateId, priority, assigneeId, milestoneId } =
           args as {
             issueId: string;
             title?: string;
@@ -559,6 +731,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             stateId?: string;
             priority?: number;
             assigneeId?: string;
+            milestoneId?: string | null;
           };
 
         const updatePayload: any = {};
@@ -567,6 +740,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (stateId) updatePayload.stateId = stateId;
         if (priority !== undefined) updatePayload.priority = priority;
         if (assigneeId) updatePayload.assigneeId = assigneeId;
+        if (milestoneId !== undefined) updatePayload.projectMilestoneId = milestoneId;
 
         await linear.updateIssue(issueId, updatePayload);
 
@@ -867,6 +1041,252 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "list_milestones": {
+        const { projectId, limit = 50 } = args as {
+          projectId?: string;
+          limit?: number;
+        };
+
+        let milestones;
+        if (projectId) {
+          const project = await linear.project(projectId);
+          milestones = await project.projectMilestones({ first: limit });
+        } else {
+          milestones = await linear.projectMilestones({ first: limit });
+        }
+
+        const milestoneList = await Promise.all(
+          milestones.nodes.map(async (milestone) => {
+            const project = await milestone.project;
+            return {
+              id: milestone.id,
+              name: milestone.name,
+              description: milestone.description,
+              targetDate: milestone.targetDate,
+              sortOrder: milestone.sortOrder,
+              project: project ? { id: project.id, name: project.name } : null,
+              createdAt: milestone.createdAt,
+              updatedAt: milestone.updatedAt,
+            };
+          })
+        );
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                { success: true, milestones: milestoneList },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case "get_milestone": {
+        const { milestoneId } = args as { milestoneId: string };
+        const milestone = await linear.projectMilestone(milestoneId);
+        const project = await milestone.project;
+        const issues = await milestone.issues({ first: 20 });
+
+        const issueList = await Promise.all(
+          issues.nodes.map(async (issue) => {
+            const state = await issue.state;
+            const assignee = await issue.assignee;
+            return {
+              id: issue.id,
+              identifier: issue.identifier,
+              title: issue.title,
+              state: state?.name || "Unknown",
+              priority: issue.priorityLabel,
+              assignee: assignee?.name,
+              url: issue.url,
+            };
+          })
+        );
+
+        const milestoneDetails = {
+          id: milestone.id,
+          name: milestone.name,
+          description: milestone.description,
+          targetDate: milestone.targetDate,
+          sortOrder: milestone.sortOrder,
+          project: project ? { id: project.id, name: project.name } : null,
+          createdAt: milestone.createdAt,
+          updatedAt: milestone.updatedAt,
+          issues: issueList,
+        };
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                { success: true, milestone: milestoneDetails },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case "create_milestone": {
+        const { name, projectId, description, targetDate, sortOrder } = args as {
+          name: string;
+          projectId: string;
+          description?: string;
+          targetDate?: string;
+          sortOrder?: number;
+        };
+
+        const milestonePayload: any = { name, projectId };
+        if (description) milestonePayload.description = description;
+        if (targetDate) milestonePayload.targetDate = targetDate;
+        if (sortOrder !== undefined) milestonePayload.sortOrder = sortOrder;
+
+        const result = await linear.createProjectMilestone(milestonePayload);
+        const milestone = await result.projectMilestone;
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  success: true,
+                  milestone: {
+                    id: milestone?.id,
+                    name: milestone?.name,
+                    description: milestone?.description,
+                    targetDate: milestone?.targetDate,
+                  },
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case "update_milestone": {
+        const { milestoneId, name, description, targetDate, sortOrder } = args as {
+          milestoneId: string;
+          name?: string;
+          description?: string;
+          targetDate?: string;
+          sortOrder?: number;
+        };
+
+        const updatePayload: any = {};
+        if (name) updatePayload.name = name;
+        if (description !== undefined) updatePayload.description = description;
+        if (targetDate !== undefined) updatePayload.targetDate = targetDate;
+        if (sortOrder !== undefined) updatePayload.sortOrder = sortOrder;
+
+        await linear.updateProjectMilestone(milestoneId, updatePayload);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                message: "Milestone updated successfully",
+              }),
+            },
+          ],
+        };
+      }
+
+      case "delete_milestone": {
+        const { milestoneId } = args as { milestoneId: string };
+
+        await linear.deleteProjectMilestone(milestoneId);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                message: "Milestone deleted successfully",
+              }),
+            },
+          ],
+        };
+      }
+
+      case "assign_issue_to_milestone": {
+        const { issueId, milestoneId } = args as {
+          issueId: string;
+          milestoneId?: string;
+        };
+
+        await linear.updateIssue(issueId, {
+          projectMilestoneId: milestoneId || null,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                message: milestoneId
+                  ? "Issue assigned to milestone successfully"
+                  : "Issue removed from milestone successfully",
+              }),
+            },
+          ],
+        };
+      }
+
+      case "list_milestone_issues": {
+        const { milestoneId, limit = 50 } = args as {
+          milestoneId: string;
+          limit?: number;
+        };
+
+        const milestone = await linear.projectMilestone(milestoneId);
+        const issues = await milestone.issues({ first: limit });
+
+        const issueList = await Promise.all(
+          issues.nodes.map(async (issue) => {
+            const state = await issue.state;
+            const assignee = await issue.assignee;
+            return {
+              id: issue.id,
+              identifier: issue.identifier,
+              title: issue.title,
+              description: issue.description?.substring(0, 300) || "",
+              state: state?.name || "Unknown",
+              stateId: state?.id,
+              priority: issue.priority,
+              priorityLabel: issue.priorityLabel,
+              assignee: assignee?.name,
+              url: issue.url,
+            };
+          })
+        );
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                { success: true, issues: issueList },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
       default:
         return {
           content: [
@@ -924,6 +1344,12 @@ const RESOURCES = [
     uri: "linear://project-updates",
     name: "Recent Project Updates",
     description: "Recent project updates across all projects in the workspace",
+    mimeType: "application/json",
+  },
+  {
+    uri: "linear://milestones",
+    name: "Project Milestones",
+    description: "List of all milestones across projects in the workspace",
     mimeType: "application/json",
   },
 ];
@@ -1067,6 +1493,31 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
         };
       }
 
+      case "linear://milestones": {
+        const milestones = await linear.projectMilestones({ first: 50 });
+        const milestoneList = await Promise.all(
+          milestones.nodes.map(async (milestone) => {
+            const project = await milestone.project;
+            return {
+              id: milestone.id,
+              name: milestone.name,
+              description: milestone.description,
+              targetDate: milestone.targetDate,
+              project: project ? { id: project.id, name: project.name } : null,
+            };
+          })
+        );
+        return {
+          contents: [
+            {
+              uri,
+              mimeType: "application/json",
+              text: JSON.stringify(milestoneList, null, 2),
+            },
+          ],
+        };
+      }
+
       default:
         throw new Error(`Unknown resource: ${uri}`);
     }
@@ -1128,6 +1579,18 @@ const PROMPTS = [
         description:
           "Optional focus area: 'progress' (what was accomplished), 'blockers' (issues encountered), 'planning' (next steps), or 'summary' (comprehensive)",
         required: false,
+      },
+    ],
+  },
+  {
+    name: "milestone_overview",
+    description:
+      "Get an overview of milestones for a project, including progress and assigned issues",
+    arguments: [
+      {
+        name: "projectId",
+        description: "The ID of the project to show milestones for",
+        required: true,
       },
     ],
   },
@@ -1256,6 +1719,34 @@ Steps to follow:
 7. Use create_project_update to post the update with the appropriate health status
 
 Keep the update concise but informative - suitable for stakeholders to quickly understand project status.`,
+            },
+          },
+        ],
+      };
+    }
+
+    case "milestone_overview": {
+      const projectId = args?.projectId as string;
+      return {
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `Please provide a milestone overview for Linear project ID: ${projectId}
+
+Steps to follow:
+
+1. First, use get_project to get the project details
+2. Use list_milestones with the projectId to get all milestones for this project
+3. For each milestone, use list_milestone_issues to see all assigned issues
+4. Present an overview showing:
+   - Each milestone with its name, description, and target date
+   - Progress: count of completed vs total issues for each milestone
+   - Issue breakdown by state (completed, in progress, todo)
+   - Any milestones approaching their target date
+
+Format the output as a clear summary showing milestone progress and any upcoming deadlines.`,
             },
           },
         ],
