@@ -1220,6 +1220,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "delete_issue": {
+        const { issueId } = args as { issueId: string };
+
+        await linear.deleteIssue(issueId);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                message: "Issue deleted successfully",
+              }),
+            },
+          ],
+        };
+      }
+
       case "assign_issue_to_milestone": {
         const { issueId, milestoneId } = args as {
           issueId: string;
